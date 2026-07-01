@@ -1,17 +1,37 @@
 mod operation;
 
+use std::fmt::Display;
+use std::fs;
+use std::path::PathBuf;
 use clap::{Arg, ArgAction, Command};
-use crate::operation::{AddTag, Operation, RemoveTag, SearchTags};
+use directories::ProjectDirs;
+use crate::operation::{AddTag, Operation, RemoveTag, SearchTags, FileTag};
 
 fn main() -> Result<(), TagError> {
     let app = App::parse()?;
+    app.execute()?;
     Ok(())
 }
 struct App {
     operation: Operation,
 }
+
 impl App {
-    fn new(operation: Operation) -> Self { Self { operation } }
+    pub fn reset() {
+        fs::remove_dir_all(App::dir());
+        fs::create_dir(App::dir());
+    }
+
+    pub fn dir() -> PathBuf {
+        ProjectDirs::from("com", "madelyn_belmen","tagger")
+            .expect("Couldn't create ProjectDirs object")
+            .data_dir()
+            .to_path_buf()
+    }
+
+    fn new(operation: Operation) -> Self {
+        Self { operation }
+    }
 
     fn parse() -> Result<Self, TagError> {
         let args = Command::new("Tagger")
@@ -34,7 +54,15 @@ impl App {
                     .about("Remove a tag")
                     .args([
                         Arg::new("Name").short('n').long("name").required(true).action(ArgAction::Set).help("The name of the tag to be removed"),
+                    ]),
+                Command::new("tag")
+                    .about("Apply a tag to a file.")
+                    .args([
+                        Arg::new("File").short('f').long("file").required(true).action(ArgAction::Set).help("The file to tag"),
+                        Arg::new("Tag").short('t').long("tag").required(true).action(ArgAction::Append).help("The tag(s) to apply"),
+                        Arg::new("Correct").short('c').long("correct").required(false).action(ArgAction::SetTrue)
                     ])
+
             ]);
         match args.get_matches().subcommand() {
             Some(("search", search_args)) => {
@@ -72,19 +100,68 @@ impl App {
 
                     Ok(app)
                 } else {
-                    Err(TagError::new(String::from("'remove' operation requires a tag name to remove.")))
+                    Err(tag_error!("'remove' operation requires a tag name to remove."))
                 }
             }
-            other => Err(TagError::new(format!("Unknown command: {:?}", other))),
+            Some(("tag", tag_args)) => {
+                if let Some(file) = tag_args.get_one::<String>("File") {
+                    if let Some(tags) = tag_args.get_many::<String>("Tag") {
+                        let tag_op = FileTag::new(
+                            PathBuf::from(file),
+                            tags.map(|tag| PathBuf::from(tag)).collect::<Vec<PathBuf>>(),
+                            tag_args.get_flag("Correct")
+                        );
+                        let op_wrapper = Operation::Tag(tag_op);
+                        let app = App::new(op_wrapper);
+                        Ok(app)
+                    } else {
+                        Err(tag_error!("You must use at least one tag!"))
+                    }
+                } else {
+                    Err(tag_error!("You need to specify a path for the file to tag!"))
+                }
+            },
+            _ => {unreachable!()},
         }
+    }
+
+    fn execute(&self) -> Result<(), TagError> {
+        match &self.operation {
+            Operation::Add(op) => {op.execute()?}
+            Operation::Remove(op) => {op.execute()?}
+            Operation::Search(op) => {
+                let search_results = op.execute()?;
+                for search_result in search_results {
+                    if let Some(result_name) = search_result.file_name() {
+                        println!("Found entry: {}", result_name.to_string_lossy().to_string())
+                    }
+                }
+                ()
+            },
+            Operation::Tag(op) => {op.execute()?}
+        }
+        Ok(())
     }
 }
 #[derive(Debug)]
+#[derive(PartialEq)]
 struct TagError {
     error: String,
 }
 impl TagError {
     fn new(error: String) -> Self {
         Self { error }
+    }
+}
+impl Display for TagError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.error)
+    }
+}
+
+#[macro_export]
+macro_rules! tag_error {
+    ($error:expr) => {
+        TagError::new(String::from($error))
     }
 }

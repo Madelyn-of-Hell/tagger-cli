@@ -3,7 +3,7 @@ mod operation;
 use std::fmt::Display;
 use std::fs;
 use std::path::PathBuf;
-use clap::{Arg, ArgAction, Command};
+use clap::{command, Arg, ArgAction, Command};
 use directories::ProjectDirs;
 use crate::operation::{AddTag, Operation, RemoveTag, SearchTags, FileTag};
 
@@ -34,8 +34,7 @@ impl App {
     }
 
     fn parse() -> Result<Self, TagError> {
-        let args = Command::new("Tagger")
-            .about("Command line interface for a tag-based filesystem designed by Madelyn Belmen")
+        let args = command!()
             .subcommands([
                 Command::new("search")
                     .about("Search files by multiple fields")
@@ -47,18 +46,18 @@ impl App {
                 Command::new("add")
                     .about("Add a new tag, either as a head or a child tag.")
                     .args([
-                        Arg::new("Name").short('n').long("name").required(true).action(ArgAction::Set).help("The name of the new tag"),
+                        Arg::new("Name").required(true).action(ArgAction::Set).help("The name of the new tag"),
                         Arg::new("Parent").short('p').long("parent").required(false).action(ArgAction::Set).help("The new tag's parent"),
                     ]),
                 Command::new("remove")
                     .about("Remove a tag")
                     .args([
-                        Arg::new("Name").short('n').long("name").required(true).action(ArgAction::Set).help("The name of the tag to be removed"),
+                        Arg::new("Name").required(true).action(ArgAction::Set).help("The name of the tag to be removed"),
                     ]),
                 Command::new("tag")
                     .about("Apply a tag to a file.")
                     .args([
-                        Arg::new("File").short('f').long("file").required(true).action(ArgAction::Set).help("The file to tag"),
+                        Arg::new("File").action(ArgAction::Set).help("The file to tag"),
                         Arg::new("Tag").short('t').long("tag").required(true).action(ArgAction::Append).help("The tag(s) to apply"),
                         Arg::new("Correct").short('c').long("correct").required(false).action(ArgAction::SetTrue)
                     ])
